@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Aura Drain — Bellandur Lake Pollution Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #060d12;
+      --surface: #0c1820;
+      --panel: #111f2b;
+      --border: #1a3347;
+      --accent: #00e5ff;
+      --accent2: #ff6b35;
+      --accent3: #39ff14;
+      --danger: #ff2d55;
+      --warn: #ffd60a;
+      --text: #e0f4ff;
+      --muted: #4a7a9b;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── LOGIN SCREEN ── */
+    #login-screen {
+      position: fixed; inset: 0; z-index: 1000;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+    }
+
+    .login-glow {
+      position: absolute;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(0,229,255,0.08) 0%, transparent 70%);
+      top: 50%; left: 50%; transform: translate(-50%,-50%);
+      pointer-events: none;
+    }
+
+    .login-box {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: 2px solid var(--accent);
+      padding: 48px 44px;
+      width: 420px;
+      clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+    }
+
+    .login-logo {
+      font-family: var(--font-head);
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -1px;
+      margin-bottom: 4px;
+    }
+
+    .login-sub {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 40px;
+    }
+
+    .login-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .login-input {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .login-input:focus { border-color: var(--accent); }
+
+    .role-select {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 28px;
+    }
+
+    .role-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+
+    .role-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,229,255,0.05);
+    }
+
+    .login-btn {
+      width: 100%;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      padding: 15px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .login-btn:hover { opacity: 0.85; }
+    .login-err { color: var(--danger); font-size: 11px; margin-top: 12px; min-height: 16px; }
+
+    /* ── APP SHELL ── */
+    #app { display: none; min-height: 100vh; }
+
+    /* TOP BAR */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px; height: 60px; gap: 24px;
+    }
+
+    .topbar-logo {
+      font-family: var(--font-head);
+      font-size: 20px; font-weight: 800;
+      color: var(--accent); letter-spacing: -0.5px;
+      margin-right: 16px;
+    }
+
+    .topbar-nav { display: flex; gap: 4px; flex: 1; }
+
+    .nav-btn {
+      background: none; border: none;
+      color: var(--muted); font-family: var(--font-mono);
+      font-size: 11px; letter-spacing: 1px;
+      text-transform: uppercase; padding: 8px 16px;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .nav-btn:hover, .nav-btn.active {
+      color: var(--accent); border-bottom-color: var(--accent);
+    }
+
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent3);
+      box-shadow: 0 0 8px var(--accent3);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .user-badge {
+      font-size: 10px; color: var(--muted);
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+
+    .logout-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-family: var(--font-mono);
+      font-size: 10px; padding: 6px 12px; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 1px;
+      transition: all 0.15s;
+    }
+    .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── PAGES ── */
+    .page { display: none; padding: 28px 24px; }
+    .page.active { display: block; }
+
+    /* ── DASHBOARD PAGE ── */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: 2px solid var(--accent);
+      padding: 20px 22px;
+      position: relative; overflow: hidden;
+    }
+
+    .metric-card::after {
+      content: '';
+      position: absolute; top: 0; right: 0;
+      width: 60px; height: 60px;
+      background: radial-gradient(circle at top right, rgba(0,229,255,0.06), transparent);
+    }
+
+    .metric-card.danger { border-top-color: var(--danger); }
+    .metric-card.warn   { border-top-color: var(--warn); }
+    .metric-card.ok     { border-top-color: var(--accent3); }
+
+    .metric-label {
+      font-size: 9px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .metric-value {
+      font-family: var(--font-head);
+      font-size: 36px; font-weight: 800;
+      line-height: 1;
+    }
+
+    .metric-value.danger { color: var(--danger); }
+    .metric-value.warn   { color: var(--warn); }
+    .metric-value.ok     { color: var(--accent3); }
+    .metric-value.accent { color: var(--accent); }
+
+    .metric-unit {
+      font-size: 10px; color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .metric-change {
+      font-size: 10px; margin-top: 8px;
+    }
+    .metric-change.up   { color: var(--danger); }
+    .metric-change.down { color: var(--accent3); }
+
+    .grid-2 {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 16px; margin-bottom: 24px;
+    }
+
+    .grid-3 {
+      display: grid; grid-template-columns: 2fr 1fr;
+      gap: 16px; margin-bottom: 24px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px 22px;
+    }
+
+    .panel-title {
+      font-size: 10px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .panel-title::after {
+      content: ''; flex: 1;
+      height: 1px; background: var(--border);
+    }
+
+    /* MAP */
+    #map {
+      height: 380px; border: 1px solid var(--border);
+      filter: brightness(0.9) saturate(0.7) hue-rotate(180deg);
+      margin-bottom: 24px;
+    }
+
+    /* ALERTS */
+    .alert-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: var(--panel);
+      border-left: 3px solid var(--warn);
+      padding: 12px 14px;
+      font-size: 11px;
+    }
+
+    .alert-item.critical { border-left-color: var(--danger); }
+    .alert-item.ok       { border-left-color: var(--accent3); }
+
+    .alert-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--warn); flex-shrink: 0; margin-top: 2px;
+    }
+    .alert-item.critical .alert-dot { background: var(--danger); }
+    .alert-item.ok       .alert-dot { background: var(--accent3); }
+
+    .alert-title { font-weight: 700; color: var(--text); }
+    .alert-meta  { color: var(--muted); font-size: 10px; margin-top: 3px; }
+
+    /* DRAIN TABLE */
+    .drain-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .drain-table th {
+      text-align: left; padding: 8px 12px;
+      font-size: 9px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .drain-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(26,51,71,0.5);
+    }
+    .drain-table tr:hover td { background: var(--panel); }
+
+    .pill {
+      display: inline-block; padding: 3px 10px;
+      font-size: 9px; letter-spacing: 1px;
+      text-transform: uppercase; border-radius: 2px;
+    }
+    .pill.high   { background: rgba(255,45,85,0.15); color: var(--danger); }
+    .pill.medium { background: rgba(255,214,10,0.15); color: var(--warn); }
+    .pill.low    { background: rgba(57,255,20,0.12);  color: var(--accent3); }
+
+    /* CHARTS */
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* REPORTS PAGE */
+    .report-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+
+    .report-card {
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 22px; cursor: pointer; transition: all 0.2s;
+    }
+    .report-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+    .report-icon {
+      font-size: 28px; margin-bottom: 12px;
+    }
+
+    .report-title {
+      font-family: var(--font-head); font-size: 15px; font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .report-desc { font-size: 10px; color: var(--muted); line-height: 1.6; }
+
+    /* PROGRESS */
+    .progress-bar {
+      height: 6px; background: var(--border);
+      margin-top: 6px; margin-bottom: 16px;
+    }
+    .progress-fill { height: 100%; background: var(--accent); transition: width 1s ease; }
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) {
+      .metrics-row { grid-template-columns: 1fr 1fr; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .report-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <div class="login-glow"></div>
+  <div class="login-box">
+    <div class="login-logo">◈ AURA DRAIN</div>
+    <div class="login-sub">Bellandur Lake Pollution Monitor</div>
+
+    <label class="login-label">Role</label>
+    <div class="role-select">
+      <button class="role-btn active" onclick="selectRole(this,'bbmp')">BBMP Officer</button>
+      <button class="role-btn" onclick="selectRole(this,'employee')">Field Employee</button>
+    </div>
+
+    <label class="login-label">Username</label>
+    <input class="login-input" id="username" type="text" placeholder="Enter username" />
+
+    <label class="login-label">Password</label>
+    <input class="login-input" id="password" type="password" placeholder="Enter password" />
+
+    <button class="login-btn" onclick="doLogin()">▶ AUTHENTICATE</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ── APP ── -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo">◈ AURA DRAIN</div>
+    <nav class="topbar-nav">
+      <button class="nav-btn active" onclick="showPage('dashboard',this)">Dashboard</button>
+      <button class="nav-btn" onclick="showPage('map-page',this)">Pollution Map</button>
+      <button class="nav-btn" onclick="showPage('drains',this)">Drain Network</button>
+      <button class="nav-btn" onclick="showPage('reports',this)">Reports</button>
+    </nav>
+    <div class="topbar-right">
+      <div class="status-dot"></div>
+      <span class="user-badge">LIVE</span>
+      <span class="user-badge" id="user-display">—</span>
+      <button class="logout-btn" onclick="doLogout()">LOGOUT</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD PAGE -->
+  <div class="page active" id="page-dashboard">
+    <div class="metrics-row">
+      <div class="metric-card danger">
+        <div class="metric-label">Overall Pollution Index</div>
+        <div class="metric-value danger">74.2</div>
+        <div class="metric-unit">/ 100 (Critical)</div>
+        <div class="metric-change up">▲ +3.1 vs last week</div>
+      </div>
+      <div class="metric-card warn">
+        <div class="metric-label">BOD Level</div>
+        <div class="metric-value warn">182</div>
+        <div class="metric-unit">mg/L (Limit: 30)</div>
+        <div class="metric-change up">▲ +12 mg/L</div>
+      </div>
+      <div class="metric-card warn">
+        <div class="metric-label">Active Drains Monitored</div>
+        <div class="metric-value warn">28</div>
+        <div class="metric-unit">of 34 total drains</div>
+        <div class="metric-change down">▼ 2 offline</div>
+      </div>
+      <div class="metric-card ok">
+        <div class="metric-label">AI Model Accuracy</div>
+        <div class="metric-value ok">91.4</div>
+        <div class="metric-unit">% classification accuracy</div>
+        <div class="metric-change down">↑ Improving</div>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="panel">
+        <div class="panel-title">Pollution Trend — 7 Days</div>
+        <div class="chart-wrap">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Zone Breakdown</div>
+        <div class="chart-wrap">
+          <canvas id="zoneChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-title">Active Alerts</div>
+        <div class="alert-list">
+          <div class="alert-item critical">
+            <div class="alert-dot"></div>
+            <div>
+              <div class="alert-title">Varthur Road Drain — Sewage Overflow</div>
+              <div class="alert-meta">Detected 14 min ago · Sector 7-B · AI Confidence: 94%</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot"></div>
+            <div>
+              <div class="alert-title">Industrial Effluent — High TDS Spike</div>
+              <div class="alert-meta">Detected 1h 22min ago · North Inlet · AI Confidence: 88%</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot"></div>
+            <div>
+              <div class="alert-title">Foam Formation — Eutrophication Signal</div>
+              <div class="alert-meta">Detected 3h ago · Lake Center · AI Confidence: 79%</div>
+            </div>
+          </div>
+          <div class="alert-item ok">
+            <div class="alert-dot"></div>
+            <div>
+              <div class="alert-title">East Sector — Pollution Level Reduced</div>
+              <div class="alert-meta">Resolved 6h ago · East Sector · Remediation Complete</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Restoration Progress</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">North Shore Remediation</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:68%"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Drain D-07 Blockage Clearance</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:45%;background:var(--warn)"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Solid Waste Removal — East Bank</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:91%;background:var(--accent3)"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">AI Model Retraining (Round 4)</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:33%;background:var(--accent)"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">GIS Database Update</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:80%;background:var(--accent)"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP PAGE -->
+  <div class="page" id="page-map-page">
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="panel-title">Interactive Pollution Map — Bellandur Lake</div>
+      <div id="map"></div>
+      <div style="display:flex;gap:20px;margin-top:14px;font-size:10px;letter-spacing:1px;text-transform:uppercase;">
+        <span style="color:var(--danger)">● High Pollution</span>
+        <span style="color:var(--warn)">● Medium Pollution</span>
+        <span style="color:var(--accent3)">● Low Pollution</span>
+        <span style="color:var(--accent)">● Drain Outlet</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRAINS PAGE -->
+  <div class="page" id="page-drains">
+    <div class="panel">
+      <div class="panel-title">Drain Network Analysis</div>
+      <table class="drain-table">
+        <thead>
+          <tr>
+            <th>Drain ID</th>
+            <th>Location</th>
+            <th>Flow Rate (L/s)</th>
+            <th>Pollution Load</th>
+            <th>Status</th>
+            <th>Last Scan</th>
+          </tr>
+        </thead>
+        <tbody id="drain-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- REPORTS PAGE -->
+  <div class="page" id="page-reports">
+    <div class="report-grid">
+      <div class="report-card">
+        <div class="report-icon">📊</div>
+        <div class="report-title">Weekly Summary</div>
+        <div class="report-desc">Comprehensive weekly pollution analysis with trend graphs and zone breakdowns.</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">🛰️</div>
+        <div class="report-title">Satellite Analysis</div>
+        <div class="report-desc">AI classification results from latest Sentinel-2 imagery with spectral signature data.</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">🗺️</div>
+        <div class="report-title">GIS Export</div>
+        <div class="report-desc">Geospatial data export for drain network, pollution hotspots, and source mapping.</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">⚠️</div>
+        <div class="report-title">Alert Log</div>
+        <div class="report-desc">Full log of all alerts, incidents, and resolutions with timestamps and GPS coordinates.</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">📈</div>
+        <div class="report-title">Remediation Progress</div>
+        <div class="report-desc">Track all ongoing restoration projects, completion rates, and BBMP action items.</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">🤖</div>
+        <div class="report-title">AI Model Report</div>
+        <div class="report-desc">Model accuracy metrics, classification confusion matrix, and retraining schedule.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Monthly Pollution Index — Bellandur Lake</div>
+      <div class="chart-wrap" style="height:280px;">
+        <canvas id="monthlyChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AUTH ──
+const USERS = {
+  'bbmp_admin': { pass: 'bbmp2024', role: 'BBMP Officer' },
+  'field_user':  { pass: 'field123', role: 'Field Employee' },
+};
+let selectedRole = 'bbmp';
+
+function selectRole(btn, role) {
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedRole = role;
+}
+
+function doLogin() {
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  const err = document.getElementById('login-err');
+  if (USERS[u] && USERS[u].pass === p) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('user-display').textContent = USERS[u].role.toUpperCase();
+    initCharts(); initMap(); initDrainTable();
+  } else {
+    err.textContent = 'Invalid credentials. Try bbmp_admin / bbmp2024';
+  }
+}
+
+function doLogout() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('username').value = '';
+  document.getElementById('password').value = '';
+}
+
+// ── NAV ──
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'map-page') setTimeout(() => map && map.invalidateSize(), 100);
+}
+
+// ── MAP ──
+let map;
+function initMap() {
+  if (map) return;
+  map = L.map('map').setView([12.9342, 77.6788], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  const zones = [
+    { latlng: [12.937, 77.675], color: '#ff2d55', label: 'High — Varthur Road Inlet', r: 320 },
+    { latlng: [12.932, 77.683], color: '#ff2d55', label: 'High — Industrial Outlet',  r: 280 },
+    { latlng: [12.930, 77.678], color: '#ffd60a', label: 'Medium — Lake Center',       r: 420 },
+    { latlng: [12.935, 77.690], color: '#39ff14', label: 'Low — East Shore',           r: 200 },
+    { latlng: [12.928, 77.672], color: '#39ff14', label: 'Low — West Edge',            r: 180 },
+  ];
+
+  zones.forEach(z => {
+    L.circle(z.latlng, { color: z.color, fillColor: z.color, fillOpacity: 0.25, radius: z.r, weight: 2 })
+      .addTo(map).bindPopup(`<b>${z.label}</b>`);
+  });
+
+  const drains = [
+    [12.9380, 77.6740], [12.9350, 77.6800], [12.9290, 77.6850],
+    [12.9310, 77.6720], [12.9260, 77.6790],
+  ];
+  drains.forEach((d, i) => {
+    L.circleMarker(d, { color: '#00e5ff', radius: 7, weight: 2, fillOpacity: 0.6 })
+      .addTo(map).bindPopup(`Drain D-0${i + 1}`);
+  });
+}
+
+// ── DRAIN TABLE ──
+const DRAINS = [
+  { id:'D-01', loc:'Varthur Road Inlet', flow:42.3, level:'high',   status:'Active',  scan:'2 min ago' },
+  { id:'D-02', loc:'AECS Layout Nala',   flow:18.7, level:'medium', status:'Active',  scan:'2 min ago' },
+  { id:'D-03', loc:'HSR Sector 2 Drain', flow:31.5, level:'high',   status:'Active',  scan:'3 min ago' },
+  { id:'D-04', loc:'Iblur Junction',     flow:9.2,  level:'low',    status:'Active',  scan:'4 min ago' },
+  { id:'D-05', loc:'Doddakannalli Nala', flow:55.8, level:'high',   status:'Active',  scan:'2 min ago' },
+  { id:'D-06', loc:'East Shore Outlet',  flow:6.1,  level:'low',    status:'Offline', scan:'2h ago' },
+  { id:'D-07', loc:'Industrial Zone NW', flow:29.4, level:'medium', status:'Active',  scan:'2 min ago' },
+  { id:'D-08', loc:'North Perimeter',    flow:13.0, level:'medium', status:'Active',  scan:'5 min ago' },
+];
+
+function initDrainTable() {
+  const tb = document.getElementById('drain-tbody');
+  tb.innerHTML = DRAINS.map(d => `
+    <tr>
+      <td><b>${d.id}</b></td>
+      <td>${d.loc}</td>
+      <td>${d.flow}</td>
+      <td><span class="pill ${d.level}">${d.level}</span></td>
+      <td style="color:${d.status==='Active'?'var(--accent3)':'var(--danger)'}">${d.status}</td>
+      <td style="color:var(--muted)">${d.scan}</td>
+    </tr>`).join('');
+}
+
+// ── CHARTS ──
+const chartDefaults = {
+  color: '#e0f4ff',
+  plugins: { legend: { labels: { color: '#4a7a9b', font: { family: 'Space Mono', size: 10 } } } },
+  scales: {
+    x: { ticks: { color: '#4a7a9b', font: { family: 'Space Mono', size: 9 } }, grid: { color: '#1a3347' } },
+    y: { ticks: { color: '#4a7a9b', font: { family: 'Space Mono', size: 9 } }, grid: { color: '#1a3347' } }
+  }
+};
+
+function initCharts() {
+  // Trend Chart
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+      datasets: [
+        { label: 'Pollution Index', data: [68,71,70,74,72,75,74], borderColor: '#ff2d55', backgroundColor: 'rgba(255,45,85,0.1)', tension: 0.4, fill: true },
+        { label: 'BOD (×10)',       data: [15,16,17,18,17,19,18], borderColor: '#ffd60a', backgroundColor: 'rgba(255,214,10,0.08)', tension: 0.4, fill: true },
+      ]
+    },
+    options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
+  });
+
+  // Zone Chart
+  new Chart(document.getElementById('zoneChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['High', 'Medium', 'Low'],
+      datasets: [{ data: [42, 35, 23], backgroundColor: ['#ff2d55','#ffd60a','#39ff14'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#4a7a9b', font: { family: 'Space Mono', size: 10 } } } }
+    }
+  });
+
+  // Monthly Chart
+  new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      datasets: [
+        { label: 'Pollution Index', data: [65,68,72,71,76,80,78,74,70,69,72,74], backgroundColor: 'rgba(255,45,85,0.6)', borderRadius: 3 },
+        { label: 'Remediation Actions', data: [3,4,5,6,4,7,8,9,7,6,5,6], backgroundColor: 'rgba(0,229,255,0.4)', borderRadius: 3 }
+      ]
+    },
+    options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
+  });
+}
+</script>
+</body>
+</html>

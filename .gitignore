@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pkl
+*.h5
+*.tif
+*.jp2
+.env
+.DS_Store
+data/raw/*
+!data/raw/.gitkeep
+models/*
+!models/.gitkeep
